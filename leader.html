@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谶纬查询</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; 
+            background: linear-gradient(135deg, #e0eafc, #cfdef3); 
+            min-height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 20px;
+        }
+        .container { 
+            width: 100%; 
+            max-width: 480px; 
+            background: rgba(255, 255, 255, 0.95); 
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08); 
+            backdrop-filter: blur(10px);
+        }
+        h2 { 
+            margin-bottom: 25px; 
+            color: #2c3e50; 
+            text-align: center; 
+            font-size: 24px; 
+            font-weight: 600;
+        }
+        input { 
+            width: 100%; 
+            padding: 14px 18px; 
+            margin-bottom: 20px; 
+            border: 2px solid #ecf0f1; 
+            border-radius: 10px; 
+            font-size: 16px; 
+            outline: none; 
+            transition: all 0.3s ease; 
+        }
+        input:focus { 
+            border-color: #3498db; 
+            box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1); 
+        }
+        button { 
+            width: 100%; 
+            padding: 14px; 
+            background: linear-gradient(90deg, #ff7e5f, #feb47b); 
+            color: #fff; 
+            border: none; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: 600; 
+            letter-spacing: 1px;
+            transition: all 0.3s ease; 
+            box-shadow: 0 4px 15px rgba(255, 126, 95, 0.3);
+        }
+        button:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(255, 126, 95, 0.4); 
+        }
+        button:active { transform: translateY(0); }
+        button:disabled { 
+            opacity: 0.7; 
+            cursor: not-allowed; 
+            transform: none; 
+        }
+        
+        .result { 
+            margin-top: 25px; 
+            padding: 20px; 
+            background: #f8f9fa; 
+            border-radius: 12px; 
+            display: none; 
+            animation: fadeIn 0.4s ease; 
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .error { color: #e74c3c; border-left: 4px solid #e74c3c; }
+        .success { color: #333; border-left: 4px solid #2ecc71; }
+        
+        /* 角色卡片样式：改为垂直布局 */
+        .role-card { 
+            padding: 15px 0; 
+            border-bottom: 1px dashed #e0e0e0; 
+            display: flex; 
+            flex-direction: column; /* 核心：让子元素垂直排列 */
+            gap: 10px; /* 文字和按钮之间的间距 */
+        }
+        .role-card:last-child { border-bottom: none; padding-bottom: 0; }
+        .role-info { font-weight: 700; color: #27ae60; font-size: 18px; }
+        .role-desc { font-size: 14px; color: #7f8c8d; margin-top: 4px; }
+        
+        /* 复制按钮样式：撑满整行 */
+        .copy-btn { 
+            width: 100%; /* 按钮占满整行宽度 */
+            padding: 10px 0; 
+            background: #3498db; 
+            color: #fff; 
+            border: none; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 14px; 
+            font-weight: 600;
+            transition: background 0.3s; 
+            margin-top: 5px;
+        }
+        .copy-btn:hover { background: #2980b9; }
+        
+        pre { 
+            margin-top: 10px; 
+            font-size: 12px; 
+            color: #95a5a6; 
+            white-space: pre-wrap; 
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>论坛ID反查游戏ID</h2>
+    <input type="text" id="userIdInput" placeholder="请输入自定义的 userId" />
+    <button id="queryBtn" onclick="fetchRoleId()">开始查询</button>
+    
+    <div id="resultBox" class="result"></div>
+</div>
+
+<script>
+    // 你的腾讯云函数代理地址
+    const PROXY_URL = 'https://1456047499-m1krs1feoi.ap-beijing.tencentscf.com';
+
+    async function fetchRoleId() {
+        const userId = document.getElementById('userIdInput').value.trim();
+        const resultBox = document.getElementById('resultBox');
+        const queryBtn = document.getElementById('queryBtn');
+
+        if (!userId) {
+            showResult('error', '⚠️ 请输入有效的 userId！');
+            return;
+        }
+
+        queryBtn.disabled = true;
+        queryBtn.innerText = '正在查询...';
+        showResult('info', '查询中，请稍候');
+
+        const realApi = `https://h.api.4399.com/welfware/pack/game/getServer?mainId=212767&userId=${encodeURIComponent(userId)}`;
+        const proxyRequestUrl = `${PROXY_URL}?url=${encodeURIComponent(realApi)}`;
+
+        try {
+            const response = await fetch(proxyRequestUrl);
+            if (!response.ok) throw new Error(`HTTP 错误! 状态码: ${response.status}`);
+
+            const res = await response.json();
+            const list = res?.data?.list;
+
+            if (Array.isArray(list) && list.length > 0) {
+                let html = '';
+                list.forEach(role => {
+                    html += `
+                        <div class="role-card">
+                            <div>
+                                <div class="role-info">ID: ${role.roleId}</div>
+                                <div class="role-desc">
+                                    ${role.roleName} | Lv.${role.level}
+                                </div>
+                            </div>
+                            <button class="copy-btn" onclick="copyText('${role.roleId}')">复制 ID</button>
+                        </div>
+                    `;
+                });
+                showResult('success', html);
+            } else {
+                showResult('error', `❌ 未找到角色信息。<br/>原始返回: <pre>${JSON.stringify(res, null, 2)}</pre>`);
+            }
+
+        } catch (err) {
+            showResult('error', `❌ 请求失败: ${err.message}`);
+        } finally {
+            queryBtn.disabled = false;
+            queryBtn.innerText = '开始查询';
+        }
+    }
+
+    // 一键复制功能
+    function copyText(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('✅ 复制成功: ');
+        }).catch(() => {
+            alert('❌ 复制失败');
+        });
+    }
+
+    // 控制结果框的显示与样式
+    function showResult(type, message) {
+        const resultBox = document.getElementById('resultBox');
+        resultBox.style.display = 'block';
+        resultBox.className = 'result'; 
+        if (type === 'error') resultBox.classList.add('error');
+        if (type === 'success') resultBox.classList.add('success');
+        resultBox.innerHTML = message;
+    }
+
+    // 支持回车键触发查询
+    document.getElementById('userIdInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') fetchRoleId();
+    });
+</script>
+
+</body>
+</html>
